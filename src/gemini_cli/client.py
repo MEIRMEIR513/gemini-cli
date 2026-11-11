@@ -122,3 +122,44 @@ class GeminiSession:
             await self.client.close()
         except Exception:
             pass
+
+    # ---- Gemini history ------------------------------------------------
+
+    async def list_gemini_chats(self) -> list[dict]:
+        """List chats from Gemini's server-side history."""
+        try:
+            chats = self.client.list_chats()
+            return [
+                {
+                    "cid": getattr(c, "cid", ""),
+                    "title": getattr(c, "title", "") or "(untitled)",
+                    "timestamp": getattr(c, "timestamp", 0),
+                }
+                for c in (chats or [])
+            ]
+        except Exception:
+            return []
+
+    async def read_gemini_chat(self, cid: str) -> dict | None:
+        """Read a specific chat's history from Gemini."""
+        try:
+            history = await self.client.read_chat(cid)
+            if not history:
+                return None
+            turns = []
+            for turn in history.turns:
+                turns.append({
+                    "role": getattr(turn, "role", ""),
+                    "text": getattr(turn, "text", ""),
+                })
+            return {"cid": cid, "turns": turns}
+        except Exception:
+            return None
+
+    async def resume_gemini_chat(self, cid: str) -> bool:
+        """Resume a Gemini chat by its cid (uses cid-only metadata)."""
+        try:
+            self.new_chat(metadata=[cid])
+            return True
+        except Exception:
+            return False

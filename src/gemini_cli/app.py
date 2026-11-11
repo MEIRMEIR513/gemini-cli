@@ -30,6 +30,9 @@ Commands:
   /model [name]       show or switch model (/models lists them)
   /models             list available models
   /cookies            set cookies interactively (no file needed)
+  /history            list chats from Gemini's server history
+  /read <cid>         read a Gemini chat's history
+  /resume-gemini <cid> resume a Gemini chat by cid
   /tmp [on|off]       toggle temporary mode (not saved to Gemini history)
   /attach <paths>     attach files to the next message
   /lines <n>          max lines shown per reply (0 = unlimited)
@@ -427,6 +430,37 @@ class GeminiTUI(App):
                 await self._say(f"Could not list models: {e}", error=True)
         elif cmd == "cookies":
             await self._start_cookie_prompt()
+        elif cmd == "history":
+            chats = await self.session.list_gemini_chats()
+            if not chats:
+                await self._say("No chats found in Gemini history.")
+            else:
+                lines = [
+                    f"- {c['cid'][:20]}... | {c['title']}"
+                    for c in chats[:20]
+                ]
+                await self._say(
+                    f"Gemini chats ({len(chats)} total):\n" + "\n".join(lines)
+                )
+        elif cmd == "read":
+            if not arg:
+                await self._say("Usage: /read <cid>", error=True)
+                return
+            chat = await self.session.read_gemini_chat(arg)
+            if not chat:
+                await self._say(f"Chat '{arg}' not found.", error=True)
+                return
+            for turn in chat["turns"][-10:]:  # last 10 turns
+                role = "You" if turn["role"] == "user" else "Gemini"
+                await self._say(f"{role}:\n{turn['text'][:500]}")
+        elif cmd == "resume-gemini":
+            if not arg:
+                await self._say("Usage: /resume-gemini <cid>", error=True)
+                return
+            if await self.session.resume_gemini_chat(arg):
+                await self._say(f"Resumed Gemini chat {arg[:20]}...")
+            else:
+                await self._say(f"Failed to resume chat '{arg}'.", error=True)
         else:
             await self._say(f"Unknown command '/{cmd}'. Try /help.", error=True)
 
