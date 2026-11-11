@@ -273,7 +273,15 @@ class GeminiTUI(App):
                     self.set_clipboard(self.last_response)
                     await self._say("Last reply copied to clipboard.")
                 except Exception:
-                    await self._say("Clipboard unavailable in this terminal.", error=True)
+                    # Fallback: save to file
+                    OUTPUT_DIR.mkdir(exist_ok=True)
+                    name = f"reply_{int(time.time())}.txt"
+                    path = OUTPUT_DIR / name
+                    path.write_text(self.last_response, encoding="utf-8")
+                    await self._say(
+                        f"Clipboard unavailable in this terminal. "
+                        f"Saved to {path} instead."
+                    )
         elif cmd == "attach":
             if not arg:
                 await self._say("Usage: /attach <path> [path...]", error=True)
