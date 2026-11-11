@@ -39,12 +39,13 @@ Commands:
 Tips:
   - Enter sends. Shift+Enter (or Ctrl+J) inserts a newline — on terminals
     that can't tell them apart, a backslash followed quickly by Enter works too.
-  - To select/copy text: click+drag inside the TUI and press Ctrl+C.
-    For terminal-native selection, hold Shift while dragging (Windows Terminal,
-    Gnome Terminal) or Option (iTerm).
+  - To copy text: click on the response text to select it, then press Ctrl+C.
+    This uses Textual's built-in selection (works in most modern terminals).
   - Prefix a file path with @ (e.g. @report.pdf) or paste a bare path
     to attach it to your message automatically.
   - Press Ctrl+X while Gemini is replying to cancel the request.
+  - Note: Hebrew/Arabic text may appear reversed depending on your terminal.
+    This is a terminal limitation — WezTerm/kitty/iTerm handle BiDi correctly.
 """
 
 
@@ -103,6 +104,7 @@ class ChatInput(TextArea):
 
 class GeminiTUI(App):
     TITLE = "Gemini CLI"
+    ALLOW_SELECT = True
     CSS = """
     #chat { height: 1fr; }
     #status { height: 1; padding: 0 1; color: $text-muted; }
@@ -289,8 +291,12 @@ class GeminiTUI(App):
             if not self.last_response:
                 await self._say("Nothing to print yet.", error=True)
             else:
-                print(self.last_response)
-                self.exit()
+                # Write to a temp file and print path — avoids TUI capture issues
+                OUTPUT_DIR.mkdir(exist_ok=True)
+                name = f"reply_{int(time.time())}.txt"
+                path = OUTPUT_DIR / name
+                path.write_text(self.last_response, encoding="utf-8")
+                await self._say(f"Saved to {path}")
         elif cmd == "attach":
             if not arg:
                 await self._say("Usage: /attach <path> [path...]", error=True)

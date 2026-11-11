@@ -78,7 +78,18 @@ to `./gemini_output/` and the paths are printed in the chat.
 ### Keyboard
 
 - **Enter** — send message
+- **Shift+Enter** or **Ctrl+J** — insert newline (multiline input)
+- **Ctrl+C** — copy selected text (click on response first)
 - **Ctrl+X** — cancel the in-flight request
+
+### Copying text
+
+- **Click** on the response text to select it (Textual's built-in selection)
+- **Ctrl+C** to copy the selection
+- `/copy` — copy last reply to clipboard (saves to file if clipboard unavailable)
+- `/print` — save last reply to `gemini_output/reply_<timestamp>.txt`
+
+**Note:** Hebrew/Arabic text may appear reversed depending on your terminal emulator. This is a terminal limitation, not the app. WezTerm, kitty, and iTerm handle bidirectional (BiDi) text correctly.
 
 ## Project layout
 
