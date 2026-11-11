@@ -52,10 +52,18 @@ TUI renders it as markdown.
 | `/new` | Start a new conversation |
 | `/save [name]` | Persist the current chat locally (`~/.gemini-cli/chats`) |
 | `/resume <name>` | Resume a saved chat (`/chats` lists them) |
+| `/chats` | List saved local chats |
 | `/model [name]` | Show or switch the language model (`/models` lists them) |
+| `/models` | List available models |
+| `/cookies` | Set cookies interactively (no file needed) |
+| `/history` | List chats from Gemini's server history |
+| `/read <cid>` | Read a Gemini chat's history (10 turns) |
+| `/resume-gemini <cid>` | Resume a Gemini chat by cid |
 | `/tmp [on\|off]` | Toggle temporary mode (not saved to Gemini history) |
 | `/attach <paths>` | Attach files to the next message |
 | `/lines <n>` | Limit displayed reply lines (`0` = unlimited) |
+| `/copy` | Copy all recent messages (status, saved files, responses) |
+| `/print` | Print all recent messages to terminal for selection (suspends TUI) |
 | `/status` | Show session info (cid, model, mode) |
 | `/clear` | Clear the screen, keep the conversation |
 | `/exit` | Quit |
