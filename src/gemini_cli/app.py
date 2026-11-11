@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import shlex
 import sys
 import time
 from pathlib import Path
+
+# Suppress all logging from gemini_webapi before any imports
+logging.getLogger("gemini_webapi").setLevel(logging.CRITICAL)
+logging.getLogger("gemini_webapi.client").setLevel(logging.CRITICAL)
 
 from bidi.algorithm import get_display
 from textual import events, on
@@ -613,10 +618,6 @@ class GeminiTUI(App):
 
 def run() -> None:
     import argparse
-    import logging
-
-    # Completely suppress gemini-webapi logs
-    logging.getLogger("gemini_webapi").setLevel(logging.CRITICAL)
 
     parser = argparse.ArgumentParser(prog="gemini-cli")
     parser.add_argument(
