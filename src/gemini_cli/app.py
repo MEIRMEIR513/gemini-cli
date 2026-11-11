@@ -115,9 +115,28 @@ class GeminiTUI(App):
     TITLE = "Gemini CLI"
     ALLOW_SELECT = True
     CSS = """
-    #chat { height: 1fr; }
-    #status { height: 1; padding: 0 1; color: $text-muted; }
-    #input { dock: bottom; height: auto; max-height: 40%; min-height: 3; }
+    Screen {
+        layout: vertical;
+    }
+    Header {
+        height: 1;
+    }
+    #chat {
+        height: 1fr;
+    }
+    #status {
+        height: 1;
+        padding: 0 1;
+        color: $text-muted;
+    }
+    #input {
+        height: auto;
+        max-height: 40%;
+        min-height: 3;
+    }
+    Footer {
+        height: 1;
+    }
     .msg-user { margin: 1 0 0 0; }
     .msg-user > .lbl { color: $accent; text-style: bold; }
     .msg-ai > .lbl { color: $success; text-style: bold; }
@@ -596,8 +615,8 @@ def run() -> None:
     import argparse
     import logging
 
-    # Suppress gemini-webapi debug logs
-    logging.getLogger("gemini_webapi").setLevel(logging.WARNING)
+    # Completely suppress gemini-webapi logs
+    logging.getLogger("gemini_webapi").setLevel(logging.CRITICAL)
 
     parser = argparse.ArgumentParser(prog="gemini-cli")
     parser.add_argument(
