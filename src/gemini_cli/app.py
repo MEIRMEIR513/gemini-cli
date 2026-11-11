@@ -9,7 +9,6 @@ import sys
 import time
 from pathlib import Path
 
-import pyperclip
 from bidi.algorithm import get_display
 from textual import events, on
 from textual.app import App, ComposeResult
@@ -18,6 +17,7 @@ from textual.message import Message
 from textual.widgets import Footer, Header, Markdown, Static, TextArea
 
 from .client import GeminiSession
+from .clipboard import copy_to_clipboard
 
 OUTPUT_DIR = Path("gemini_output")
 
@@ -346,24 +346,11 @@ class GeminiTUI(App):
             if not self.last_response:
                 await self._say("Nothing to copy yet.", error=True)
             else:
-                copied = False
-                # Try pyperclip first (local clipboard)
-                try:
-                    pyperclip.copy(self.last_response)
-                    copied = True
-                    await self._say("Copied to clipboard (local).")
-                except Exception:
-                    pass
-                # Try OSC 52 (terminal clipboard, works over SSH)
-                if not copied:
-                    try:
-                        self.set_clipboard(self.last_response)
-                        copied = True
-                        await self._say("Copied to clipboard (OSC 52).")
-                    except Exception:
-                        pass
-                # Fallback: save to file
-                if not copied:
+                success, method = copy_to_clipboard(self.last_response)
+                if success:
+                    await self._say(f"Copied to clipboard via {method}.")
+                else:
+                    # Fallback: save to file
                     OUTPUT_DIR.mkdir(exist_ok=True)
                     name = f"reply_{int(time.time())}.txt"
                     path = OUTPUT_DIR / name
