@@ -12,6 +12,7 @@ license = { text = "MIT" }
 dependencies = [
     "gemini_webapi>=2.1",
     "textual>=1.0",
+    "python-bidi>=0.6.0",
 ]
 
 [project.scripts]

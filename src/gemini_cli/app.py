@@ -9,6 +9,7 @@ import sys
 import time
 from pathlib import Path
 
+from bidi.algorithm import get_display
 from textual import events, on
 from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll
@@ -174,14 +175,14 @@ class GeminiTUI(App):
         area = await self._chat_area()
         style = "msg-err" if error else ""
         await area.mount(
-            Static(text, classes=f"msg-meta {style} {cls}".strip())
+            Static(self._bidi(text), classes=f"msg-meta {style} {cls}".strip())
         )
         area.scroll_end(animate=False)
 
     async def _say_user(self, text: str) -> None:
         area = await self._chat_area()
         await area.mount(
-            Static(f"\nYou:\n{text}", classes="msg-user")
+            Static(f"\nYou:\n{self._bidi(text)}", classes="msg-user")
         )
         area.scroll_end(animate=False)
 
@@ -202,6 +203,13 @@ class GeminiTUI(App):
             f"\n\n... ({len(lines) - self.max_lines} more lines — "
             f"raise with /lines {self.max_lines * 2} or set 0)"
         )
+
+    def _bidi(self, text: str) -> str:
+        """Apply Unicode Bidirectional Algorithm for correct RTL display."""
+        try:
+            return get_display(text)
+        except Exception:
+            return text
 
     # ---- input handling ----------------------------------------------
 
@@ -387,7 +395,7 @@ class GeminiTUI(App):
                 text = getattr(resp, "text", "") or ""
                 self.last_response = text
                 full = self._truncate_lines(text)
-                md.update(full or "_(empty response)_")
+                md.update(self._bidi(full) or "_(empty response)_")
                 await self._handle_rich_output(resp)
             else:
                 async for chunk in self.session.send_stream(prompt):
@@ -397,10 +405,10 @@ class GeminiTUI(App):
                     if now - self._last_stream_update > 0.08:
                         self._last_stream_update = now
                         shown = self._truncate_lines(full)
-                        md.update(shown or "...")
+                        md.update(self._bidi(shown) or "...")
                 self.last_response = full
                 final = self._truncate_lines(full)
-                md.update(final or "_(empty response)_")
+                md.update(self._bidi(final) or "_(empty response)_")
                 # final chunk carries full metadata
                 try:
                     await self._handle_rich_output(chunk)

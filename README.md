@@ -97,5 +97,9 @@ to `./gemini_output/` and the paths are printed in the chat.
 src/gemini_cli/
   cookies.py   # Netscape + JSON cookie export parser
   client.py    # async wrapper around gemini_webapi
-  app.py       # Textual TUI
+  app.py       # Textual TUI with BiDi support
 ```
+
+## BiDi (Hebrew/Arabic) support
+
+The app automatically applies the Unicode Bidirectional Algorithm (UAX #9) via `python-bidi` to all displayed text. This ensures Hebrew/Arabic text renders correctly even in terminals that don't support BiDi natively.
