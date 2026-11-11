@@ -594,6 +594,10 @@ class GeminiTUI(App):
 
 def run() -> None:
     import argparse
+    import logging
+
+    # Suppress gemini-webapi debug logs
+    logging.getLogger("gemini_webapi").setLevel(logging.WARNING)
 
     parser = argparse.ArgumentParser(prog="gemini-cli")
     parser.add_argument(
