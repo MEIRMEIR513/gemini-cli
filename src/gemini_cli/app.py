@@ -39,6 +39,9 @@ Commands:
 Tips:
   - Enter sends. Shift+Enter (or Ctrl+J) inserts a newline — on terminals
     that can't tell them apart, a backslash followed quickly by Enter works too.
+  - To select/copy text: click+drag inside the TUI and press Ctrl+C.
+    For terminal-native selection, hold Shift while dragging (Windows Terminal,
+    Gnome Terminal) or Option (iTerm).
   - Prefix a file path with @ (e.g. @report.pdf) or paste a bare path
     to attach it to your message automatically.
   - Press Ctrl+X while Gemini is replying to cancel the request.
@@ -282,6 +285,12 @@ class GeminiTUI(App):
                         f"Clipboard unavailable in this terminal. "
                         f"Saved to {path} instead."
                     )
+        elif cmd == "print":
+            if not self.last_response:
+                await self._say("Nothing to print yet.", error=True)
+            else:
+                print(self.last_response)
+                self.exit()
         elif cmd == "attach":
             if not arg:
                 await self._say("Usage: /attach <path> [path...]", error=True)
