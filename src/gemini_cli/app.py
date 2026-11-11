@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import shlex
 import sys
 import time
@@ -29,6 +30,7 @@ Commands:
   /tmp [on|off]       toggle temporary mode (not saved to Gemini history)
   /attach <paths>     attach files to the next message
   /lines <n>          max lines shown per reply (0 = unlimited)
+  /copy               copy the last Gemini reply to the clipboard
   /status             show session info
   /clear              clear the screen (keeps the conversation)
   /exit, /quit        exit
@@ -62,6 +64,7 @@ class GeminiTUI(App):
         self.busy = False
         self._worker = None
         self._last_stream_update = 0.0
+        self.last_response = ""
 
     # ---- layout -----------------------------------------------------
 
@@ -202,6 +205,15 @@ class GeminiTUI(App):
                 await self._say("Usage: /lines <n>", error=True)
                 return
             await self._say(f"Max reply lines: {self.max_lines or 'unlimited'}")
+        elif cmd == "copy":
+            if not self.last_response:
+                await self._say("Nothing to copy yet.", error=True)
+            else:
+                try:
+                    self.set_clipboard(self.last_response)
+                    await self._say("Last reply copied to clipboard.")
+                except Exception:
+                    await self._say("Clipboard unavailable in this terminal.", error=True)
         elif cmd == "attach":
             if not arg:
                 await self._say("Usage: /attach <path> [path...]", error=True)
@@ -290,6 +302,7 @@ class GeminiTUI(App):
                 # works too, but keep it simple and reliable).
                 resp = await self.session.send(prompt or "Describe these files.", files=files)
                 text = getattr(resp, "text", "") or ""
+                self.last_response = text
                 full = self._truncate_lines(text)
                 md.update(full or "_(empty response)_")
                 await self._handle_rich_output(resp)
@@ -302,6 +315,7 @@ class GeminiTUI(App):
                         self._last_stream_update = now
                         shown = self._truncate_lines(full)
                         md.update(shown or "...")
+                self.last_response = full
                 final = self._truncate_lines(full)
                 md.update(final or "_(empty response)_")
                 # final chunk carries full metadata
@@ -379,15 +393,20 @@ def run() -> None:
     )
     args = parser.parse_args()
 
-    cookies = (
-        args.cookies
-        or __import__("os").environ.get("GEMINI_COOKIES")
-        or "gemini.google.com_cookies.txt"
-    )
-    if not Path(cookies).is_file():
-        print(f"Cookies file not found: {cookies}", file=sys.stderr)
+    repo_root = Path(__file__).resolve().parents[2]
+    candidates = [
+        args.cookies,
+        os.environ.get("GEMINI_COOKIES"),
+        "gemini.google.com_cookies.txt",  # current directory
+        repo_root / "gemini.google.com_cookies.txt",  # repo/install root
+        Path.home() / ".gemini-cli" / "gemini.google.com_cookies.txt",
+    ]
+    cookies = next((str(c) for c in candidates if c and Path(c).is_file()), None)
+    if not cookies:
         print(
-            "Export cookies from https://gemini.google.com "
+            "Cookies file not found. Looked in:\n"
+            + "\n".join(f"  - {c}" for c in candidates if c)
+            + "\nExport cookies from https://gemini.google.com "
             "(Netscape cookies.txt or JSON) and pass --cookies <path>.",
             file=sys.stderr,
         )
