@@ -37,8 +37,8 @@ Commands:
   /tmp [on|off]       toggle temporary mode (not saved to Gemini history)
   /attach <paths>     attach files to the next message
   /lines <n>          max lines shown per reply (0 = unlimited)
-  /copy               copy the last Gemini reply (tries clipboard, then prints to terminal)
-  /print              print the last reply to terminal for selection (suspends TUI)
+  /copy               copy all recent messages (status, saved files, responses)
+  /print              print all recent messages to terminal for selection
   /status             show session info
   /clear              clear the screen (keeps the conversation)
   /exit, /quit        exit
@@ -135,6 +135,7 @@ class GeminiTUI(App):
         self._worker = None
         self._last_stream_update = 0.0
         self.last_response = ""
+        self.recent_messages: list[str] = []  # Store all recent messages
         self._cookie_prompt_state = None  # None, "psid", "psidts"
 
     # ---- layout -----------------------------------------------------
@@ -176,6 +177,9 @@ class GeminiTUI(App):
 
     def _set_status(self, text: str) -> None:
         self.query_one("#status", Static).update(text)
+        self.recent_messages.append(f"[STATUS] {text}")
+        if len(self.recent_messages) > 100:
+            self.recent_messages = self.recent_messages[-100:]
 
     async def _chat_area(self) -> VerticalScroll:
         return self.query_one("#chat", VerticalScroll)
@@ -187,6 +191,9 @@ class GeminiTUI(App):
             Static(self._bidi(text), classes=f"msg-meta {style} {cls}".strip())
         )
         area.scroll_end(animate=False)
+        self.recent_messages.append(text)
+        if len(self.recent_messages) > 100:
+            self.recent_messages = self.recent_messages[-100:]
 
     async def _say_user(self, text: str) -> None:
         area = await self._chat_area()
@@ -194,6 +201,9 @@ class GeminiTUI(App):
             Static(f"\nYou:\n{self._bidi(text)}", classes="msg-user")
         )
         area.scroll_end(animate=False)
+        self.recent_messages.append(f"You: {text}")
+        if len(self.recent_messages) > 100:
+            self.recent_messages = self.recent_messages[-100:]
 
     async def _say_ai_start(self) -> Markdown:
         area = await self._chat_area()
@@ -346,13 +356,13 @@ class GeminiTUI(App):
                 return
             await self._say(f"Max reply lines: {self.max_lines or 'unlimited'}")
         elif cmd == "copy":
-            if not self.last_response:
+            if not self.recent_messages:
                 await self._say("Nothing to copy yet.", error=True)
             else:
-                # Try clipboard first
-                success, method = copy_to_clipboard(self.last_response)
+                text = "\n\n".join(self.recent_messages)
+                success, method = copy_to_clipboard(text)
                 if success:
-                    await self._say(f"Copied to clipboard via {method}.")
+                    await self._say(f"Copied all recent messages via {method}.")
                 else:
                     # Suspend TUI and print to terminal for native selection
                     await self._print_to_terminal()
@@ -480,6 +490,7 @@ class GeminiTUI(App):
                 resp = await self.session.send(prompt or "Describe these files.", files=files)
                 text = getattr(resp, "text", "") or ""
                 self.last_response = text
+                self.recent_messages.append(f"Gemini: {text}")
                 full = self._truncate_lines(text)
                 md.update(self._bidi(full) or "_(empty response)_")
                 await self._handle_rich_output(resp)
@@ -495,6 +506,7 @@ class GeminiTUI(App):
                 self.last_response = full
                 final = self._truncate_lines(full)
                 md.update(self._bidi(final) or "_(empty response)_")
+                self.recent_messages.append(f"Gemini: {full}")
                 # final chunk carries full metadata
                 try:
                     await self._handle_rich_output(chunk)
@@ -538,25 +550,30 @@ class GeminiTUI(App):
             except Exception as e:
                 saved.append(f"(media save failed: {e})")
         if saved:
-            await self._say("Saved to gemini_output/:\n" + "\n".join(saved))
+            msg = "Saved to gemini_output/:\n" + "\n".join(saved)
+            await self._say(msg)
+            self.recent_messages.append(msg)
         thoughts = getattr(resp, "thoughts", None)
         if thoughts:
             text = thoughts if isinstance(thoughts, str) else str(thoughts)
-            await self._say(f"_thinking:_\n{text[:2000]}", cls="msg-meta")
+            msg = f"_thinking:_\n{text[:2000]}"
+            await self._say(msg, cls="msg-meta")
+            self.recent_messages.append(msg)
 
     # ---- actions ------------------------------------------------------
 
     async def _print_to_terminal(self) -> None:
-        """Suspend TUI and print text to terminal for native selection."""
-        if not self.last_response:
+        """Suspend TUI and print all recent messages to terminal for selection."""
+        if not self.recent_messages:
             await self._say("Nothing to print.", error=True)
             return
         try:
             with self.suspend():
                 print("\n" + "=" * 60)
-                print("LAST RESPONSE (select with mouse, then copy):")
+                print("RECENT MESSAGES (select with mouse, then copy):")
                 print("=" * 60)
-                print(self.last_response)
+                for msg in self.recent_messages:
+                    print(msg)
                 print("=" * 60)
                 print("Press Enter to return to Gemini CLI...")
                 input()
