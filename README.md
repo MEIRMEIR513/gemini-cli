@@ -81,13 +81,19 @@ to `./gemini_output/` and the paths are printed in the chat.
 - **Shift+Enter** or **Ctrl+J** — insert newline (multiline input)
 - **Ctrl+C** — copy selected text (click on response first)
 - **Ctrl+X** — cancel the in-flight request
+- **Ctrl+Z** — suspend app (Unix only, resume with `fg`)
 
 ### Copying text
 
 - **Click** on the response text to select it (Textual's built-in selection)
 - **Ctrl+C** to copy the selection
-- `/copy` — copy last reply to clipboard (saves to file if clipboard unavailable)
-- `/print` — save last reply to `gemini_output/reply_<timestamp>.txt`
+- `/copy` — copy last reply (tries pyperclip → OSC 52 → suspend TUI print)
+- `/print` — suspend TUI and print reply to terminal for native selection
+
+**For Azure Cloud Shell / SSH:** Use `/print` — it suspends the TUI and prints
+the text directly to the terminal, allowing you to use the terminal's native
+selection (mouse drag) to copy text. This works in any terminal that supports
+basic text selection.
 
 **Note:** Hebrew/Arabic text may appear reversed depending on your terminal emulator. This is a terminal limitation, not the app. WezTerm, kitty, and iTerm handle bidirectional (BiDi) text correctly.
 

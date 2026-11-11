@@ -37,7 +37,8 @@ Commands:
   /tmp [on|off]       toggle temporary mode (not saved to Gemini history)
   /attach <paths>     attach files to the next message
   /lines <n>          max lines shown per reply (0 = unlimited)
-  /copy               copy the last Gemini reply to the clipboard
+  /copy               copy the last Gemini reply (tries clipboard, then prints to terminal)
+  /print              print the last reply to terminal for selection (suspends TUI)
   /status             show session info
   /clear              clear the screen (keeps the conversation)
   /exit, /quit        exit
@@ -47,6 +48,8 @@ Tips:
     that can't tell them apart, a backslash followed quickly by Enter works too.
   - To copy text: click on the response text to select it, then press Ctrl+C.
     This uses Textual's built-in selection (works in most modern terminals).
+  - If clipboard doesn't work: use /print to suspend TUI and print text
+    to terminal for native selection (works in Azure Cloud Shell, SSH, etc).
   - Prefix a file path with @ (e.g. @report.pdf) or paste a bare path
     to attach it to your message automatically.
   - Press Ctrl+X while Gemini is replying to cancel the request.
@@ -346,28 +349,15 @@ class GeminiTUI(App):
             if not self.last_response:
                 await self._say("Nothing to copy yet.", error=True)
             else:
+                # Try clipboard first
                 success, method = copy_to_clipboard(self.last_response)
                 if success:
                     await self._say(f"Copied to clipboard via {method}.")
                 else:
-                    # Fallback: save to file
-                    OUTPUT_DIR.mkdir(exist_ok=True)
-                    name = f"reply_{int(time.time())}.txt"
-                    path = OUTPUT_DIR / name
-                    path.write_text(self.last_response, encoding="utf-8")
-                    await self._say(
-                        f"Clipboard unavailable. Saved to {path} instead."
-                    )
+                    # Suspend TUI and print to terminal for native selection
+                    await self._print_to_terminal()
         elif cmd == "print":
-            if not self.last_response:
-                await self._say("Nothing to print yet.", error=True)
-            else:
-                # Write to a temp file and print path — avoids TUI capture issues
-                OUTPUT_DIR.mkdir(exist_ok=True)
-                name = f"reply_{int(time.time())}.txt"
-                path = OUTPUT_DIR / name
-                path.write_text(self.last_response, encoding="utf-8")
-                await self._say(f"Saved to {path}")
+            await self._print_to_terminal()
         elif cmd == "attach":
             if not arg:
                 await self._say("Usage: /attach <path> [path...]", error=True)
@@ -555,6 +545,23 @@ class GeminiTUI(App):
             await self._say(f"_thinking:_\n{text[:2000]}", cls="msg-meta")
 
     # ---- actions ------------------------------------------------------
+
+    async def _print_to_terminal(self) -> None:
+        """Suspend TUI and print text to terminal for native selection."""
+        if not self.last_response:
+            await self._say("Nothing to print.", error=True)
+            return
+        try:
+            with self.suspend():
+                print("\n" + "=" * 60)
+                print("LAST RESPONSE (select with mouse, then copy):")
+                print("=" * 60)
+                print(self.last_response)
+                print("=" * 60)
+                print("Press Enter to return to Gemini CLI...")
+                input()
+        except Exception as e:
+            await self._say(f"Failed to print: {e}", error=True)
 
     def action_cancel_worker(self) -> None:
         if self._worker and self.busy:
