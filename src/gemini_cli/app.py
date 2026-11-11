@@ -29,6 +29,7 @@ Commands:
   /chats              list saved chats
   /model [name]       show or switch model (/models lists them)
   /models             list available models
+  /cookies            set cookies interactively (no file needed)
   /tmp [on|off]       toggle temporary mode (not saved to Gemini history)
   /attach <paths>     attach files to the next message
   /lines <n>          max lines shown per reply (0 = unlimited)
@@ -127,6 +128,7 @@ class GeminiTUI(App):
         self._worker = None
         self._last_stream_update = 0.0
         self.last_response = ""
+        self._cookie_prompt_state = None  # None, "psid", "psidts"
 
     # ---- layout -----------------------------------------------------
 
@@ -219,10 +221,68 @@ class GeminiTUI(App):
         event.input.clear()
         if not raw:
             return
+        # Cookie prompt intercepts input
+        if self._cookie_prompt_state:
+            await self._handle_cookie_input(raw)
+            return
         if raw.startswith("/"):
             await self._handle_command(raw)
         else:
             await self._send_message(raw)
+
+    async def _start_cookie_prompt(self) -> None:
+        self._cookie_prompt_state = "psid"
+        self._cookie_psid = ""
+        self._cookie_psidts = ""
+        self._set_status("Cookies: paste __Secure-1PSID value, then Enter")
+        await self._say(
+            "Cookie setup — paste the value of **__Secure-1PSID** and press Enter.\n"
+            "(Find it in DevTools → Application → Cookies → gemini.google.com)"
+        )
+
+    async def _handle_cookie_input(self, value: str) -> None:
+        if self._cookie_prompt_state == "psid":
+            self._cookie_psid = value.strip()
+            if not self._cookie_psid:
+                await self._say("Empty value — try again.", error=True)
+                return
+            self._cookie_prompt_state = "psidts"
+            self._set_status("Cookies: paste __Secure-1PSIDTS value, then Enter")
+            await self._say(
+                "Now paste the value of **__Secure-1PSIDTS** and press Enter.\n"
+                "(Leave empty and press Enter to skip — some accounts don't have it)"
+            )
+        elif self._cookie_prompt_state == "psidts":
+            self._cookie_psidts = value.strip()
+            await self._save_and_apply_cookies()
+
+    async def _save_and_apply_cookies(self) -> None:
+        try:
+            # Save as Netscape-format file in ~/.gemini-cli/
+            cookies_dir = Path.home() / ".gemini-cli"
+            cookies_dir.mkdir(parents=True, exist_ok=True)
+            cookies_file = cookies_dir / "cookies.txt"
+
+            # Write minimal Netscape format
+            lines = [
+                "# Netscape HTTP Cookie File",
+                f".google.com\tTRUE\t/\tTRUE\t0\t__Secure-1PSID\t{self._cookie_psid}",
+            ]
+            if self._cookie_psidts:
+                lines.append(
+                    f".google.com\tTRUE\t/\tTRUE\t0\t__Secure-1PSIDTS\t{self._cookie_psidts}"
+                )
+            cookies_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+            # Re-init session with new cookies
+            self.session = GeminiSession(cookies_file)
+            await self.session.init()
+            self._cookie_prompt_state = None
+            self._set_status("Cookies updated — reconnected")
+            await self._say(f"Cookies saved to {cookies_file} and applied.")
+        except Exception as e:
+            self._cookie_prompt_state = None
+            await self._say(f"Failed to apply cookies: {e}", error=True)
 
     async def _extract_files(self, text: str) -> tuple[str, list[str]]:
         """Pull @path tokens and bare existing paths out of the message."""
@@ -365,6 +425,8 @@ class GeminiTUI(App):
                 await self._say("\n".join(lines) or "No models discovered yet.")
             except Exception as e:
                 await self._say(f"Could not list models: {e}", error=True)
+        elif cmd == "cookies":
+            await self._start_cookie_prompt()
         else:
             await self._say(f"Unknown command '/{cmd}'. Try /help.", error=True)
 
