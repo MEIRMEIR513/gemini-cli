@@ -9,10 +9,11 @@ import sys
 import time
 from pathlib import Path
 
-from textual import on
+from textual import events, on
 from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll
-from textual.widgets import Footer, Header, Input, Markdown, Static
+from textual.message import Message
+from textual.widgets import Footer, Header, Markdown, Static, TextArea
 
 from .client import GeminiSession
 
@@ -36,10 +37,65 @@ Commands:
   /exit, /quit        exit
 
 Tips:
+  - Enter sends. Shift+Enter (or Ctrl+J) inserts a newline — on terminals
+    that can't tell them apart, a backslash followed quickly by Enter works too.
   - Prefix a file path with @ (e.g. @report.pdf) or paste a bare path
     to attach it to your message automatically.
   - Press Ctrl+X while Gemini is replying to cancel the request.
 """
+
+
+class ChatInput(TextArea):
+    """Multiline input: Enter submits, Shift+Enter / Ctrl+J inserts newline.
+
+    Some terminals can't distinguish Shift+Enter and send a literal backslash
+    followed by Enter instead (e.g. VSCode's built-in terminal) — that pair is
+    detected by timestamp and converted into a newline as well.
+    """
+
+    _BACKSLASH_ENTER_GAP = 0.15
+
+    class Submitted(Message):
+        def __init__(self, input: "ChatInput", value: str) -> None:
+            super().__init__()
+            self.input = input
+            self.value = value
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._backslash_time: float | None = None
+
+    def action_insert_newline(self) -> None:
+        self.insert("\n")
+
+    async def _on_key(self, event: events.Key) -> None:
+        now = time.monotonic()
+        if event.key == "enter":
+            event.stop()
+            event.prevent_default()
+            # Terminal workaround: '\\' + Enter (emitted for Shift+Enter)
+            if (
+                self._backslash_time is not None
+                and now - self._backslash_time <= self._BACKSLASH_ENTER_GAP
+                and self.text.endswith("\\")
+            ):
+                self._backslash_time = None
+                self.action_delete_left()  # remove the stray backslash
+                self.action_insert_newline()
+                return
+            self._backslash_time = None
+            text = self.text.strip()
+            if text:
+                self.post_message(self.Submitted(input=self, value=text))
+            return
+        if event.key == "\\":
+            self._backslash_time = now
+        if event.key in ("shift+enter", "ctrl+j", "alt+enter"):
+            event.stop()
+            event.prevent_default()
+            self.action_insert_newline()
+            return
+        await super()._on_key(event)
 
 
 class GeminiTUI(App):
@@ -47,7 +103,7 @@ class GeminiTUI(App):
     CSS = """
     #chat { height: 1fr; }
     #status { height: 1; padding: 0 1; color: $text-muted; }
-    #input { dock: bottom; }
+    #input { dock: bottom; height: auto; max-height: 40%; min-height: 3; }
     .msg-user { margin: 1 0 0 0; }
     .msg-user > .lbl { color: $accent; text-style: bold; }
     .msg-ai > .lbl { color: $success; text-style: bold; }
@@ -73,11 +129,15 @@ class GeminiTUI(App):
         with VerticalScroll(id="chat"):
             yield Static("Connecting to Gemini...", id="boot")
         yield Static("", id="status")
-        yield Input(placeholder="Message Gemini... (try /help)", id="input")
+        yield ChatInput(id="input")
         yield Footer()
 
     async def on_mount(self) -> None:
-        self.query_one("#input", Input).focus()
+        ta = self.query_one("#input", ChatInput)
+        ta.soft_wrap = True
+        ta.show_line_numbers = False
+        ta.placeholder = "Message Gemini... (Enter=send, Shift+Enter=newline)"
+        ta.focus()
         await self._init_session()
 
     async def _init_session(self) -> None:
@@ -140,8 +200,8 @@ class GeminiTUI(App):
 
     # ---- input handling ----------------------------------------------
 
-    @on(Input.Submitted, "#input")
-    async def on_submit(self, event: Input.Submitted) -> None:
+    @on(ChatInput.Submitted)
+    async def on_submit(self, event: ChatInput.Submitted) -> None:
         raw = event.value.strip()
         event.input.clear()
         if not raw:
