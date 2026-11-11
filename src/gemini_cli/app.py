@@ -9,6 +9,7 @@ import sys
 import time
 from pathlib import Path
 
+import pyperclip
 from bidi.algorithm import get_display
 from textual import events, on
 from textual.app import App, ComposeResult
@@ -345,18 +346,30 @@ class GeminiTUI(App):
             if not self.last_response:
                 await self._say("Nothing to copy yet.", error=True)
             else:
+                copied = False
+                # Try pyperclip first (local clipboard)
                 try:
-                    self.set_clipboard(self.last_response)
-                    await self._say("Last reply copied to clipboard.")
+                    pyperclip.copy(self.last_response)
+                    copied = True
+                    await self._say("Copied to clipboard (local).")
                 except Exception:
-                    # Fallback: save to file
+                    pass
+                # Try OSC 52 (terminal clipboard, works over SSH)
+                if not copied:
+                    try:
+                        self.set_clipboard(self.last_response)
+                        copied = True
+                        await self._say("Copied to clipboard (OSC 52).")
+                    except Exception:
+                        pass
+                # Fallback: save to file
+                if not copied:
                     OUTPUT_DIR.mkdir(exist_ok=True)
                     name = f"reply_{int(time.time())}.txt"
                     path = OUTPUT_DIR / name
                     path.write_text(self.last_response, encoding="utf-8")
                     await self._say(
-                        f"Clipboard unavailable in this terminal. "
-                        f"Saved to {path} instead."
+                        f"Clipboard unavailable. Saved to {path} instead."
                     )
         elif cmd == "print":
             if not self.last_response:
